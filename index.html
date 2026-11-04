@@ -1,0 +1,124 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Space Learning Lab</title><meta name="theme-color" content="#2b3a35">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-512.png">
+<style>
+:root{--ink:#e9e4e6;--dim:#b9b0b4;--rose:#b98494;--sage:#86a593;--deep:#1f2a27;--card:rgba(30,40,37,.82)}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:system-ui,sans-serif;color:var(--ink);background:#1c2422;
+background-image:radial-gradient(ellipse at 20% 15%,rgba(185,132,148,.28),transparent 45%),radial-gradient(ellipse at 80% 70%,rgba(134,165,147,.28),transparent 50%),radial-gradient(ellipse at 55% 35%,rgba(120,90,100,.25),transparent 35%),radial-gradient(ellipse at 30% 85%,rgba(90,120,105,.3),transparent 40%);background-attachment:fixed;-webkit-tap-highlight-color:transparent}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
+h1{font-size:1.15rem;margin:0;flex:1;letter-spacing:.02em}
+button{font:inherit;color:var(--ink);background:rgba(134,165,147,.22);border:1px solid rgba(134,165,147,.55);border-radius:10px;padding:9px 13px;cursor:pointer;touch-action:manipulation}
+button:hover{background:rgba(134,165,147,.35)}button.rose{background:rgba(185,132,148,.22);border-color:rgba(185,132,148,.6)}
+button:disabled{opacity:.45}
+main{max-width:900px;margin:0 auto;padding:0 12px 30px}
+.card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.mode{text-align:left;padding:14px;min-height:96px}.mode b{display:block;font-size:1.05rem;margin-bottom:4px}.mode small{color:var(--dim)}
+.score{color:var(--sage);font-weight:600}.hint{color:var(--dim);font-size:.92rem}
+.opts{display:grid;gap:8px;margin-top:10px}.ok{border-color:#9fc4ad!important;background:rgba(134,165,147,.45)!important}.bad{border-color:#c99aa8!important;background:rgba(185,132,148,.4)!important}
+canvas{width:100%;display:block;border-radius:12px;background:#141b19;touch-action:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+input[type=range]{flex:1;min-width:150px;accent-color:#86a593}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.chip{padding:8px 11px}
+.slots{display:grid;gap:6px;margin-top:10px}.slot{border:1px dashed rgba(255,255,255,.25);border-radius:10px;padding:8px;min-height:38px;color:var(--dim)}
+.slot.f{color:var(--ink);border-style:solid;border-color:rgba(185,132,148,.6)}
+.fact{margin-top:10px;padding:10px;border-left:3px solid var(--rose);background:rgba(0,0,0,.2);border-radius:6px}
+.scale{overflow-x:auto;white-space:nowrap;padding:10px 0;border-radius:10px;background:#141b19}
+.track{position:relative;height:110px}
+.pl{position:absolute;top:30px;transform:translateX(-50%);text-align:center;font-size:.75rem;color:var(--dim)}
+.pl i{display:block;margin:0 auto 4px;border-radius:50%}
+</style></head><body>
+<header><h1 id="ttl">Space Learning Lab</h1><span class="score" id="stars"></span><button id="lang" aria-label="language">日本語</button><button id="home" class="rose">⌂</button></header>
+<main id="app"></main>
+<script>
+const T={en:{},ja:{}};let L=localStorage.getItem('sll-lang')||'en';
+const tr=(en,ja)=>L==='ja'?ja:en;
+let best=JSON.parse(localStorage.getItem('sll-best')||'{}');
+function saveBest(k,v){if(!(best[k]>=v)){best[k]=v;localStorage.setItem('sll-best',JSON.stringify(best))}showStars()}
+function showStars(){const n=Object.values(best).reduce((a,b)=>a+b,0);document.getElementById('stars').textContent='★ '+n}
+const $=s=>document.querySelector(s),app=$('#app');
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+const PL=[ // name en, ja, AU, diameter km, color, period yrs
+['Mercury','水星',0.39,4879,'#a99f9a',0.24],['Venus','金星',0.72,12104,'#c9b38f',0.62],['Earth','地球',1,12742,'#7f9fb0',1],['Mars','火星',1.52,6779,'#b98270',1.88],
+['Jupiter','木星',5.2,139820,'#c4a88e',11.86],['Saturn','土星',9.58,116460,'#cdbb94',29.46],['Uranus','天王星',19.2,50724,'#9cbcbc',84],['Neptune','海王星',30.05,49244,'#7f93b5',164.8]];
+const pn=p=>tr(p[0],p[1]);
+let view='home',cleanup=null;
+function go(v){if(cleanup){cleanup();cleanup=null}view=v;render()}
+function render(){document.documentElement.lang=L;$('#lang').textContent=L==='en'?'日本語':'English';$('#ttl').textContent=tr('Space Learning Lab','宇宙まなびラボ');showStars();(V[view]||V.home)()}
+$('#lang').onclick=()=>{L=L==='en'?'ja':'en';localStorage.setItem('sll-lang',L);render()};$('#home').onclick=()=>go('home');
+const V={};
+V.home=()=>{const m=[['scale',tr('Solar System to Scale','太陽系の縮尺'),tr('Scroll a true-distance map, then guess the gaps.','本当の距離の地図を見て、距離をあてよう。')],
+['order',tr('Put the Planets in Order','惑星をならべよう'),tr('Tap planets from the Sun outward — or by size.','太陽に近い順・大きさの順にタップ。')],
+['life',tr('Life of a Star','星の一生'),tr('Build the life story of small and huge stars.','小さな星と巨大な星の一生を組み立てよう。')],
+['orbit',tr('Orbit Lab','軌道ラボ'),tr('Launch a satellite. Too slow it falls, too fast it escapes.','衛星を打ち上げよう。遅いと落ち、速いと飛び去る。')],
+['quiz',tr('Space Quiz','宇宙クイズ'),tr('10 questions on light, gravity, stars and galaxies.','光・重力・星・銀河の10問。')]];
+app.innerHTML=`<div class="card hint">${tr('Five short activities. Everything works offline. Stars ★ are your best scores.','5つの短いアクティビティ。すべてオフラインで動きます。★は最高記録です。')}</div><div class="grid">${m.map(x=>`<button class="mode" data-v="${x[0]}"><b>${x[1]}</b><small>${x[2]}</small><br><small class="score">${best[x[0]]!=null?'★ '+best[x[0]]:''}</small></button>`).join('')}</div>`;
+app.querySelectorAll('.mode').forEach(b=>b.onclick=()=>go(b.dataset.v))};
+// ---- Scale
+V.scale=()=>{const W=3200,px=W/31;let q=0,sc=0;
+const qs=shuffle([[2,4],[3,4],[4,5],[5,6],[6,7],[0,2],[2,7]]).slice(0,5);
+app.innerHTML=`<div class="card"><b>${tr('Distances from the Sun (1 AU = Sun–Earth ≈ 150 million km)','太陽からの距離（1天文単位＝太陽と地球の距離≒1億5千万km）')}</b><p class="hint">${tr('Swipe sideways. Planet sizes are enlarged ~1000×; distances are true to scale.','横にスワイプ。惑星の大きさは約1000倍に拡大、距離は正確な縮尺です。')}</p>
+<div class="scale"><div class="track" style="width:${W+60}px"><div class="pl" style="left:14px"><i style="width:26px;height:26px;background:#d8b48f"></i>${tr('Sun','太陽')}</div>${PL.map(p=>`<div class="pl" style="left:${30+p[2]*px}px"><i style="width:${Math.max(5,p[3]/5000)}px;height:${Math.max(5,p[3]/5000)}px;background:${p[4]}"></i>${pn(p)}<br>${p[2]} AU</div>`).join('')}</div></div></div><div class="card" id="qa"></div>`;
+const ask=()=>{const qa=$('#qa');if(q>=qs.length){qa.innerHTML=`<b>${tr('Score','得点')}: ${sc}/${qs.length}</b><div class="fact">${tr('Light from the Sun takes about 8 minutes to reach Earth and over 4 hours to reach Neptune.','太陽の光が地球に届くのに約8分、海王星までは4時間以上かかります。')}</div><div class="row"><button id="again">${tr('Play again','もう一度')}</button></div>`;saveBest('scale',sc);$('#again').onclick=()=>go('scale');return}
+const [a,b]=qs[q],A=PL[a],B=PL[b],gap=+(B[2]-A[2]).toFixed(2);
+const wrong=shuffle([gap*0.3,gap*2.5,gap*0.6,gap*4].map(x=>+x.toFixed(2))).slice(0,3);
+const opts=shuffle([gap,...wrong]);
+qa.innerHTML=`<b>${q+1}/${qs.length}. ${tr(`How far is it from ${pn(A)} to ${pn(B)} (at closest line-up)?`,`${pn(A)}から${pn(B)}まではどのくらい？（一直線に並んだとき）`)}</b><div class="opts">${opts.map(o=>`<button data-o="${o}">${o} AU</button>`).join('')}</div><div id="fb"></div>`;
+qa.querySelectorAll('[data-o]').forEach(bt=>bt.onclick=()=>{const r=+bt.dataset.o===gap;if(r)sc++;qa.querySelectorAll('[data-o]').forEach(x=>{x.disabled=true;if(+x.dataset.o===gap)x.classList.add('ok')});if(!r)bt.classList.add('bad');
+$('#fb').innerHTML=`<div class="fact">${tr(`${gap} AU ≈ ${Math.round(gap*150)} million km. At highway speed (100 km/h) that would take about ${Math.round(gap*1.5e8/100/24/365)} years.`,`${gap}天文単位≒${Math.round(gap*150)}00万km。時速100kmで約${Math.round(gap*1.5e8/100/24/365)}年かかります。`)}</div><div class="row"><button id="nx">${tr('Next','次へ')}</button></div>`;$('#nx').onclick=()=>{q++;ask()}})};ask()};
+// ---- Order
+V.order=()=>{let round=0,sc=0;const rounds=[['dist',tr('Tap from closest to the Sun to farthest','太陽に近い順にタップ')],['size',tr('Tap from smallest to largest','小さい順にタップ')],['year',tr('Tap from shortest year to longest year','1年（公転周期）が短い順にタップ')]];
+const play=()=>{if(round>=rounds.length){app.innerHTML=`<div class="card"><b>${tr('Score','得点')}: ${sc}/24</b><div class="fact">${tr('Notice: farther planets have much longer years — Kepler\'s third law (period² ∝ distance³).','遠い惑星ほど1年がずっと長い——ケプラーの第3法則（周期²∝距離³）です。')}</div><div class="row"><button id="again">${tr('Play again','もう一度')}</button></div></div>`;saveBest('order',sc);$('#again').onclick=()=>go('order');return}
+const [k,txt]=rounds[round],key=k==='dist'?2:k==='size'?3:5,right=PL.slice().sort((a,b)=>a[key]-b[key]);let picks=[];
+app.innerHTML=`<div class="card"><b>${round+1}/3. ${txt}</b><div class="chips" id="ch">${shuffle(PL).map(p=>`<button class="chip" data-n="${p[0]}">${pn(p)}</button>`).join('')}</div><div class="slots" id="sl"></div><div id="fb"></div></div>`;
+const draw=()=>{$('#sl').innerHTML=picks.map((p,i)=>{const ok=p===right[i];return `<div class="slot f ${ok?'ok':'bad'}">${i+1}. ${pn(p)} — ${k==='dist'?p[2]+' AU':k==='size'?p[3].toLocaleString()+' km':p[5]+tr(' Earth years',' 年')}</div>`}).join('')};
+app.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{picks.push(PL.find(p=>p[0]===b.dataset.n));b.disabled=true;draw();if(picks.length===8){const s=picks.filter((p,i)=>p===right[i]).length;sc+=s;$('#fb').innerHTML=`<div class="fact">${s}/8 ${tr('in the right place.','が正しい位置。')}</div><div class="row"><button id="nx">${tr('Next','次へ')}</button></div>`;$('#nx').onclick=()=>{round++;play()}}})};play()};
+// ---- Life cycle
+V.life=()=>{const paths=[[tr('A Sun-like star','太陽のような星'),[[tr('Nebula (cloud of gas and dust)','星雲（ガスとちりの雲）'),tr('Gravity pulls a cold cloud together.','重力で冷たい雲が集まる。')],[tr('Protostar','原始星'),tr('The clump heats up as it shrinks.','縮みながら熱くなる。')],[tr('Main-sequence star','主系列星'),tr('Hydrogen fuses into helium for ~10 billion years.','約100億年、水素がヘリウムに核融合。')],[tr('Red giant','赤色巨星'),tr('Core runs low on hydrogen; outer layers swell.','中心の水素が減り、外側がふくらむ。')],[tr('Planetary nebula','惑星状星雲'),tr('Outer layers drift away as a glowing shell.','外層が光る殻となって広がる。')],[tr('White dwarf','白色矮星'),tr('An Earth-sized hot core slowly cools.','地球ほどの大きさの熱い芯がゆっくり冷える。')]]],
+[tr('A star over 8× the Sun\'s mass','太陽の8倍以上の重い星'),[[tr('Nebula (cloud of gas and dust)','星雲（ガスとちりの雲）'),tr('A large cloud collapses.','大きな雲が収縮する。')],[tr('Massive main-sequence star','重い主系列星'),tr('Burns hot and blue, but lives only millions of years.','青く高温で燃えるが、寿命は数百万年。')],[tr('Red supergiant','赤色超巨星'),tr('Fuses heavier elements up to iron.','鉄までの重い元素をつくる。')],[tr('Supernova','超新星爆発'),tr('The core collapses and the star explodes, spreading elements.','中心がつぶれて大爆発し、元素をまき散らす。')],[tr('Neutron star or black hole','中性子星またはブラックホール'),tr('An ultra-dense remnant is left behind.','超高密度の残骸が残る。')]]]];
+let pi=0,sc=0;const play=()=>{if(pi>=2){app.innerHTML=`<div class="card"><b>${tr('Score','得点')}: ${sc}/11</b><div class="fact">${tr('The iron in your blood and calcium in your bones were made inside stars long ago.','血液の鉄や骨のカルシウムは、昔の星の中でつくられました。')}</div><div class="row"><button id="again">${tr('Play again','もう一度')}</button></div></div>`;saveBest('life',sc);$('#again').onclick=()=>go('life');return}
+const [nm,st]=paths[pi];let n=0;app.innerHTML=`<div class="card"><b>${tr('Life of','一生：')} ${nm}</b><p class="hint">${tr('Tap the stages in the order they happen.','起こる順にタップしよう。')}</p><div class="chips">${shuffle(st.map((s,i)=>i)).map(i=>`<button class="chip" data-i="${i}">${st[i][0]}</button>`).join('')}</div><div class="slots" id="sl"></div><div id="fb"></div></div>`;let miss=0;
+app.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(i===n){b.disabled=true;b.classList.add('ok');$('#sl').insertAdjacentHTML('beforeend',`<div class="slot f">${n+1}. <b>${st[i][0]}</b> — ${st[i][1]}</div>`);n++;if(n===st.length){const s=Math.max(0,st.length-miss);sc+=s;$('#fb').innerHTML=`<div class="row"><button id="nx">${tr('Next','次へ')}</button></div>`;$('#nx').onclick=()=>{pi++;play()}}}else{miss++;b.classList.add('bad');setTimeout(()=>b.classList.remove('bad'),500)}})};play()};
+// ---- Orbit lab
+V.orbit=()=>{const goals=[['orbit',tr('Goal 1: get into orbit — survive 2 full laps without crashing or escaping.','目標1：軌道に乗せよう——墜落も脱出もせず2周。')],['circle',tr('Goal 2: make a near-circular orbit (height stays almost the same).','目標2：ほぼ円い軌道をつくろう（高さがほぼ一定）。')],['escape',tr('Goal 3: escape Earth\'s gravity completely.','目標3：地球の重力から完全に脱出しよう。')]];let gi=0,sc=0;
+app.innerHTML=`<div class="card"><b>${tr('Orbit Lab','軌道ラボ')}</b><p class="hint" id="goal"></p><canvas id="cv" width="800" height="560"></canvas>
+<div class="row"><label for="sp">${tr('Launch speed','打ち上げ速度')}</label><input type="range" id="sp" min="4" max="11" step="0.1" value="6"><span id="spv"></span></div>
+<div class="row"><button id="launch">🚀 ${tr('Launch','発射')}</button><button id="reset" class="rose">${tr('Reset','リセット')}</button></div><div class="fact" id="msg">${tr('A satellite in orbit is always falling — it just moves sideways fast enough to keep missing the ground.','軌道上の衛星はずっと落ち続けています——横に速く進むので地面に当たらないのです。')}</div></div>`;
+const cv=$('#cv'),c=cv.getContext('2d'),W=800,H=560,cx=W/2,cy=H/2,R=55,r0=115,GM=49*r0,K=1.13;
+let s=null,trail=[],raf=0,stars=Array.from({length:90},()=>[Math.random()*W,Math.random()*H,Math.random()]);
+const sp=$('#sp'),spv=$('#spv');const upd=()=>spv.textContent=(sp.value*K).toFixed(1)+' km/s';sp.oninput=upd;upd();
+const setGoal=()=>$('#goal').textContent=gi<3?goals[gi][1]+`  (${gi+1}/3)`:tr('All goals done!','すべて達成！');setGoal();
+function draw(){c.fillStyle='#141b19';c.fillRect(0,0,W,H);for(const t of stars){c.fillStyle=`rgba(230,220,225,${.2+t[2]*.4})`;c.fillRect(t[0],t[1],1.5,1.5)}
+const g=c.createRadialGradient(cx-15,cy-15,8,cx,cy,R);g.addColorStop(0,'#8fb0a0');g.addColorStop(.6,'#5d7f73');g.addColorStop(1,'#7d6470');c.fillStyle=g;c.beginPath();c.arc(cx,cy,R,0,7);c.fill();
+c.strokeStyle='rgba(185,132,148,.7)';c.lineWidth=2;c.beginPath();trail.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.stroke();
+const p=s||{x:cx,y:cy-r0};c.fillStyle='#e9d8de';c.beginPath();c.arc(p.x,p.y,5,0,7);c.fill()}
+function end(t,won){cancelAnimationFrame(raf);raf=0;s=null;$('#launch').disabled=false;$('#msg').innerHTML=t;if(won){sc++;gi++;setGoal();if(gi>=3){saveBest('orbit',3);$('#msg').innerHTML+=`<br><b>${tr('Great work! Real numbers: low orbit needs about 7.8 km/s, escape needs 11.2 km/s.','おみごと！実際は低軌道に約7.8km/s、脱出に11.2km/sが必要です。')}</b>`}}}
+function step(){for(let k=0;k<6;k++){const dx=s.x-cx,dy=s.y-cy,r=Math.hypot(dx,dy),a=GM/(r*r),dt=.16;s.vx-=a*dx/r*dt;s.vy-=a*dy/r*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;
+const ang=Math.atan2(dy,dx);let d=ang-s.la;if(d>Math.PI)d-=2*Math.PI;if(d<-Math.PI)d+=2*Math.PI;s.tot+=d;s.la=ang;s.rmin=Math.min(s.rmin,r);s.rmax=Math.max(s.rmax,r);
+if(r<R){draw();return end(tr('💥 Crashed! Too slow — gravity pulled it down before it could go around.','💥 墜落！遅すぎて、回りきる前に重力に引き戻されました。'),false)}
+if(r>900){const e=goals[gi]&&goals[gi][0]==='escape';draw();return end(e?tr('✅ Escaped! Fast enough that gravity can never pull it back.','✅ 脱出成功！重力でも引き戻せない速さです。'):tr('🌌 It escaped into space — too fast for an orbit.','🌌 宇宙へ飛び去りました——軌道には速すぎます。'),e)}
+if(Math.abs(s.tot)>4*Math.PI){const g=goals[gi]&&goals[gi][0],circ=(s.rmax-s.rmin)/s.rmax<.12;let t=tr(`🛰 Stable orbit! Height ranged ${Math.round(s.rmin-R)}–${Math.round(s.rmax-R)} px — ${circ?'nearly circular':'an ellipse'}.`,`🛰 安定した軌道！高さは${Math.round(s.rmin-R)}〜${Math.round(s.rmax-R)}px——${circ?'ほぼ円':'楕円'}です。`);draw();return end(t,g==='orbit'||(g==='circle'&&circ))}}
+trail.push([s.x,s.y]);if(trail.length>1500)trail.shift();draw();raf=requestAnimationFrame(step)}
+$('#launch').onclick=()=>{if(raf)return;trail=[];s={x:cx,y:cy-r0,vx:+sp.value,vy:0,la:-Math.PI/2,tot:0,rmin:1e9,rmax:0};$('#launch').disabled=true;raf=requestAnimationFrame(step)};
+$('#reset').onclick=()=>{cancelAnimationFrame(raf);raf=0;s=null;trail=[];$('#launch').disabled=false;draw()};draw();cleanup=()=>cancelAnimationFrame(raf)};
+// ---- Quiz
+V.quiz=()=>{const Q=[[tr('How long does sunlight take to reach Earth?','太陽の光が地球に届くまでの時間は？'),[tr('About 8 minutes','約8分'),tr('About 8 seconds','約8秒'),tr('About 8 hours','約8時間'),tr('Instantly','一瞬')],tr('Light travels 300,000 km/s; the Sun is 150 million km away.','光は秒速30万km、太陽までは1億5千万kmです。')],
+[tr('What powers the Sun?','太陽を光らせているのは？'),[tr('Nuclear fusion of hydrogen','水素の核融合'),tr('Burning coal-like fuel','石炭のような燃焼'),tr('Electricity','電気'),tr('Volcanoes','火山')],tr('In the core, hydrogen nuclei fuse into helium, releasing energy.','中心で水素がヘリウムに融合し、エネルギーを出します。')],
+[tr('Why do we have seasons?','季節があるのはなぜ？'),[tr('Earth\'s axis is tilted 23.5°','地軸が23.5°傾いているから'),tr('Earth gets closer to the Sun in summer','夏は太陽に近づくから'),tr('The Sun gets hotter in summer','夏は太陽が熱くなるから'),tr('The Moon blocks sunlight','月が光をさえぎるから')],tr('Earth is actually closest to the Sun in early January!','地球が太陽に最も近いのは実は1月初めです！')],
+[tr('What is a light-year?','1光年とは？'),[tr('A distance','距離'),tr('A length of time','時間の長さ'),tr('A unit of brightness','明るさの単位'),tr('A star\'s age','星の年齢')],tr('The distance light travels in a year: about 9.5 trillion km.','光が1年で進む距離：約9兆5千億km。')],
+[tr('The closest star to the Sun is…','太陽に一番近い恒星は？'),[tr('Proxima Centauri','プロキシマ・ケンタウリ'),tr('Sirius','シリウス'),tr('Polaris','北極星'),tr('Betelgeuse','ベテルギウス')],tr('About 4.2 light-years away.','約4.2光年先です。')],
+[tr('What colour are the hottest stars?','最も高温の星の色は？'),[tr('Blue-white','青白'),tr('Red','赤'),tr('Orange','オレンジ'),tr('Yellow','黄')],tr('Red stars are the coolest (~3,000°C); blue stars can exceed 30,000°C.','赤い星は低温（約3000℃）、青い星は3万℃以上。')],
+[tr('Why don\'t astronauts on the ISS feel weight?','ISSの宇宙飛行士が無重力に感じるのはなぜ？'),[tr('They are in free fall around Earth','地球のまわりを自由落下しているから'),tr('There is no gravity in space','宇宙に重力はないから'),tr('The ISS has anti-gravity','反重力装置があるから'),tr('They are too far from Earth','地球から遠すぎるから')],tr('Gravity at ISS height is still about 90% of surface gravity.','ISSの高さでも重力は地上の約90%あります。')],
+[tr('What is our galaxy called?','私たちの銀河の名前は？'),[tr('The Milky Way','天の川銀河'),tr('Andromeda','アンドロメダ'),tr('The Big Dipper','北斗七星'),tr('Orion','オリオン')],tr('It holds roughly 100–400 billion stars.','約1000億〜4000億個の星があります。')],
+[tr('A black hole is…','ブラックホールとは？'),[tr('So dense that not even light escapes','光さえ逃げられないほど高密度な天体'),tr('An empty hole in space','宇宙の空っぽの穴'),tr('A dark planet','暗い惑星'),tr('A cold star','冷たい星')],tr('Its boundary is called the event horizon.','その境目を事象の地平線といいます。')],
+[tr('How old is the universe?','宇宙の年齢は？'),[tr('About 13.8 billion years','約138億年'),tr('About 4.6 billion years','約46億年'),tr('About 6,000 years','約6000年'),tr('It has always existed','ずっと昔からある')],tr('4.6 billion years is the age of the Sun and Earth.','46億年は太陽と地球の年齢です。')],
+[tr('Which planet has the strongest gravity at its cloud tops?','雲頂の重力が最も強い惑星は？'),[tr('Jupiter','木星'),tr('Earth','地球'),tr('Saturn','土星'),tr('Neptune','海王星')],tr('About 2.5× Earth\'s gravity.','地球の約2.5倍です。')],
+[tr('Why does the Moon show phases?','月が満ち欠けするのはなぜ？'),[tr('We see different amounts of its sunlit half','太陽に照らされた半分の見え方が変わるから'),tr('Earth\'s shadow covers it','地球の影がかかるから'),tr('Clouds block it','雲が隠すから'),tr('It changes shape','形が変わるから')],tr('Earth\'s shadow only causes lunar eclipses.','地球の影が起こすのは月食だけです。')]];
+const qs=shuffle(Q).slice(0,10);let i=0,sc=0;const ask=()=>{if(i>=qs.length){app.innerHTML=`<div class="card"><b>${tr('Score','得点')}: ${sc}/10</b><div class="row"><button id="again">${tr('Play again','もう一度')}</button></div></div>`;saveBest('quiz',sc);$('#again').onclick=()=>go('quiz');return}
+const [q,o,f]=qs[i],right=o[0];app.innerHTML=`<div class="card"><b>${i+1}/10. ${q}</b><div class="opts">${shuffle(o).map(x=>`<button data-a="${x===right?1:0}">${x}</button>`).join('')}</div><div id="fb"></div></div>`;
+app.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{const r=b.dataset.a==='1';if(r)sc++;app.querySelectorAll('[data-a]').forEach(x=>{x.disabled=true;if(x.dataset.a==='1')x.classList.add('ok')});if(!r)b.classList.add('bad');$('#fb').innerHTML=`<div class="fact">${f}</div><div class="row"><button id="nx">${tr('Next','次へ')}</button></div>`;$('#nx').onclick=()=>{i++;ask()}})};ask()};
+render();
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
